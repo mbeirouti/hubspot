@@ -144,6 +144,6 @@ func main() {
 		fmt.Println(resp.StatusCode)
 		fmt.Println(string(respBytes))
 	default:
-		fmt.Println("Uh oh, spadoodios!")
+		fmt.Println("Uh oh, spadoodios..")
 	}
 }
