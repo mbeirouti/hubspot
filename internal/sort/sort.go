@@ -6,18 +6,20 @@ import (
 	"time"
 )
 
-type ByTime []string
+type ByStartDate []string
 
-func (t ByTime) Len() int      { return len(t) }
-func (t ByTime) Swap(i, j int) { t[i], t[j] = t[j], t[i] }
-func (t ByTime) Less(i, j int) bool {
-	tis := strings.Split(t[i], ",")
-	tjs := strings.Split(t[j], ",")
+func (timeSlot ByStartDate) Len() int      { return len(timeSlot) }
+func (timeSlot ByStartDate) Swap(i, j int) { timeSlot[i], timeSlot[j] = timeSlot[j], timeSlot[i] }
+func (timeSlot ByStartDate) Less(i, j int) bool {
+	// Get two dates from each timeSlot string
+	iTimeSlotDates := strings.Split(timeSlot[i], ",")
+	jTimeSlotDates := strings.Split(timeSlot[j], ",")
 
-	tiTime, _ := time.Parse(models.ISO8601, tis[0])
-	tjTime, _ := time.Parse(models.ISO8601, tjs[0])
+	// Ignore errors because we assume that data is validated at this stage
+	iStartDate, _ := time.Parse(models.ISO8601, iTimeSlotDates[0])
+	jStartDate, _ := time.Parse(models.ISO8601, jTimeSlotDates[0])
 
-	if tiTime.Before(tjTime) {
+	if iStartDate.Before(jStartDate) {
 		return true
 	}
 

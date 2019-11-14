@@ -56,6 +56,7 @@ func main() {
 		partnersByCountry[partner.Country] = append(partnersByCountry[partner.Country], newPartner)
 	}
 
+	// For each country make map with each valid timeSlot and a list of the partners available at that timeSlot
 	partnersByTimeSlot := map[string]map[string][]string{}
 	for country := range partnersByCountry {
 		partnersByTimeSlot[country] = map[string][]string{}
@@ -67,16 +68,16 @@ func main() {
 				timeDifference := partner.AvailableDates[i+1].Sub(partner.AvailableDates[i]).Hours()
 				if int(timeDifference) == oneDay {
 					// Add partner to the list of partners available for that two day slot
-					// Each available two day slot is represented by the unique string slotString
-					slotString := fmt.Sprintf("%s,%s", partner.AvailableDates[i].Format(models.ISO8601), partner.AvailableDates[i+1].Format(models.ISO8601))
-					partnersByTimeSlot[country][slotString] = append(partnersByTimeSlot[country][slotString], partner.Email)
+					// Each available two day slot is represented by a unique string called timeSlot
+					timeSlot := fmt.Sprintf("%s,%s", partner.AvailableDates[i].Format(models.ISO8601), partner.AvailableDates[i+1].Format(models.ISO8601))
+					partnersByTimeSlot[country][timeSlot] = append(partnersByTimeSlot[country][timeSlot], partner.Email)
 				}
 			}
 		}
 	}
 
+	// Find  earliest two day timeSlot with max number of attending partners per country
 	countryMaxTimeSlot := map[string]string{}
-	// Find max time slot by country
 	for country := range partnersByTimeSlot {
 
 		maxCount := -1
@@ -86,7 +87,7 @@ func main() {
 			}
 		}
 
-		// Get all time slots with the maxCount
+		// Get all timeSlots with the maxCount (this could be made more efficient but at the cost of simplicity)
 		maxTimeSlots := []string{}
 		for timeSlot, partners := range partnersByTimeSlot[country] {
 			if len(partners) == maxCount {
@@ -94,8 +95,8 @@ func main() {
 			}
 		}
 
-		// Get the earliest time slot with maxCount
-		sort.Sort(mysort.ByTime(maxTimeSlots))
+		// Get the earliest start date timeSlot with maxCount
+		sort.Sort(mysort.ByStartDate(maxTimeSlots))
 
 		// Set that as the correct answer
 		countryMaxTimeSlot[country] = maxTimeSlots[0]
@@ -111,7 +112,7 @@ func main() {
 		dates := strings.Split(maxTimeSlot, ",")
 		startDate := dates[0]
 
-		// Append partners that are available at maxTimeSlot
+		// Add all partners available at maxTimeSlot
 		newCountry := models.Country{
 			AttendeeCount: len(partnersByTimeSlot[country][maxTimeSlot]),
 			Attendees:     partnersByTimeSlot[country][maxTimeSlot],
@@ -130,7 +131,10 @@ func main() {
 	}
 
 	// Check response for posted result
-	if resp.StatusCode != http.StatusOK {
+	switch resp.StatusCode {
+	case http.StatusOK:
+		fmt.Println("You did it.. Woot!")
+	case http.StatusBadRequest:
 		respBytes, err := ioutil.ReadAll(resp.Body)
 		if err != nil {
 			fmt.Printf("error reading response body %s", err)
@@ -139,7 +143,7 @@ func main() {
 
 		fmt.Println(resp.StatusCode)
 		fmt.Println(string(respBytes))
-	} else {
-		fmt.Println("You did it woot!")
+	default:
+		fmt.Println("Uh oh, spadoodios!")
 	}
 }
