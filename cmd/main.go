@@ -30,9 +30,9 @@ func main() {
 		fmt.Printf("error building request %s", err)
 	}
 
-	// Put original data into a list of Partners instead (makes more sense to me)
-	partners := []models.Partner{}
-	for i, partner := range jsonResponse["partners"] {
+	// Put partners into a dictionary mapping country to list of partners for that country
+	partnersByCountry := map[string][]models.Partner{}
+	for _, partner := range jsonResponse["partners"] {
 		newPartner := models.Partner{
 			FirstName:      partner.FirstName,
 			LastName:       partner.LastName,
@@ -41,7 +41,8 @@ func main() {
 			AvailableDates: []time.Time{},
 		}
 
-		partners = append(partners, newPartner)
+		// Parse date strings into actual Golang time.Time objects
+		// This is a workaround to an issue inherent to Golang's JSON decoding library
 		for _, availability := range partner.AvailableDates {
 			time, err := time.Parse(models.ISO8601, availability)
 			if err != nil {
@@ -49,27 +50,15 @@ func main() {
 				return
 			}
 
-			partners[i].AvailableDates = append(partners[i].AvailableDates, time)
+			newPartner.AvailableDates = append(newPartner.AvailableDates, time)
 		}
+
+		partnersByCountry[partner.Country] = append(partnersByCountry[partner.Country], newPartner)
 	}
 
-	// Group partners by country in a new map
-	partnersByCountry := map[string][]models.Partner{}
-	for _, partner := range partners {
-		if _, ok := partnersByCountry[partner.Country]; ok {
-			partnersByCountry[partner.Country] = append(partnersByCountry[partner.Country], partner)
-		} else {
-			partnersByCountry[partner.Country] = []models.Partner{}
-			partnersByCountry[partner.Country] = append(partnersByCountry[partner.Country], partner)
-		}
-	}
-
-	timeSlotsByCountry := map[string]map[string]int{}
 	partnersByTimeSlot := map[string]map[string][]string{}
 	for country := range partnersByCountry {
 		partnersByTimeSlot[country] = map[string][]string{}
-
-		timeSlotCount := map[string]int{}
 		// For each partner in each country
 		for _, partner := range partnersByCountry[country] {
 			// For all available dates of the partner
@@ -77,43 +66,30 @@ func main() {
 				// Find all the two consecutive day slots (assuming dates are already sorted)
 				timeDifference := partner.AvailableDates[i+1].Sub(partner.AvailableDates[i]).Hours()
 				if int(timeDifference) == oneDay {
-					// Add partner to the count of partners with that two day slot available
+					// Add partner to the list of partners available for that two day slot
 					// Each available two day slot is represented by the unique string slotString
 					slotString := fmt.Sprintf("%s,%s", partner.AvailableDates[i].Format(models.ISO8601), partner.AvailableDates[i+1].Format(models.ISO8601))
-					if _, ok := timeSlotCount[slotString]; ok {
-						timeSlotCount[slotString] += 1
-					} else {
-						timeSlotCount[slotString] = 1
-					}
-
-					// Add partner to the list of partners available for that two day slot
-					if _, ok := partnersByTimeSlot[country][slotString]; ok {
-						partnersByTimeSlot[country][slotString] = append(partnersByTimeSlot[country][slotString], partner.Email)
-					} else {
-						partnersByTimeSlot[country][slotString] = []string{}
-						partnersByTimeSlot[country][slotString] = append(partnersByTimeSlot[country][slotString], partner.Email)
-					}
+					partnersByTimeSlot[country][slotString] = append(partnersByTimeSlot[country][slotString], partner.Email)
 				}
 			}
 		}
-
-		timeSlotsByCountry[country] = timeSlotCount
 	}
 
 	countryMaxTimeSlot := map[string]string{}
 	// Find max time slot by country
-	for country := range timeSlotsByCountry {
+	for country := range partnersByTimeSlot {
+
 		maxCount := -1
-		for _, count := range timeSlotsByCountry[country] {
-			if count > maxCount {
-				maxCount = count
+		for _, partners := range partnersByTimeSlot[country] {
+			if len(partners) > maxCount {
+				maxCount = len(partners)
 			}
 		}
 
 		// Get all time slots with the maxCount
 		maxTimeSlots := []string{}
-		for timeSlot, count := range timeSlotsByCountry[country] {
-			if count == maxCount {
+		for timeSlot, partners := range partnersByTimeSlot[country] {
+			if len(partners) == maxCount {
 				maxTimeSlots = append(maxTimeSlots, timeSlot)
 			}
 		}
@@ -125,11 +101,11 @@ func main() {
 		countryMaxTimeSlot[country] = maxTimeSlots[0]
 	}
 
-	// Initialize response
+	// Initialize result
 	response := map[string][]models.Country{}
 	response["countries"] = []models.Country{}
 
-	// Add necessary data to response
+	// Add necessary data to result
 	for country, maxTimeSlot := range countryMaxTimeSlot {
 		// Get start date only from the timeslot
 		dates := strings.Split(maxTimeSlot, ",")
@@ -146,14 +122,14 @@ func main() {
 		response["countries"] = append(response["countries"], newCountry)
 	}
 
-	// Post Response
+	// Post result
 	resp, err := requests.PostData(responseURL, response)
 	if err != nil {
 		fmt.Printf("error posting response %s", err)
 		return
 	}
 
-	// Check response
+	// Check response for posted result
 	if resp.StatusCode != http.StatusOK {
 		respBytes, err := ioutil.ReadAll(resp.Body)
 		if err != nil {
@@ -163,5 +139,7 @@ func main() {
 
 		fmt.Println(resp.StatusCode)
 		fmt.Println(string(respBytes))
+	} else {
+		fmt.Println("You did it woot!")
 	}
 }
